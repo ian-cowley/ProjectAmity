@@ -1,0 +1,22 @@
+# Tasks
+
+- [x] Create GlacierDbService.cs implementation <!-- id: 1 -->
+- [x] Update DbInitializer.cs schema setup for Glacier.Sql <!-- id: 2 -->
+- [x] Refactor DirectoryScannerService.cs for GlacierDbService <!-- id: 3 -->
+- [x] Refactor Program.cs for GlacierDbService and add API endpoints <!-- id: 4 -->
+- [x] Implement Skip Intro / Skip Credits in scanner and player <!-- id: 5 -->
+- [x] Implement Visual Details Editor form in UI and backend <!-- id: 6 -->
+- [x] Implement Live Transcoding Quality controls in player and backend <!-- id: 7 -->
+- [x] Style the edit form, skip buttons, and quality selector in style.css <!-- id: 8 -->
+- [x] Implement General System Settings & Custom UI Themes <!-- id: 10 -->
+- [x] Implement Mark Watched / Unwatched states on Movies, Episodes, and TV Shows <!-- id: 11 -->
+- [x] Implement Library Grid Sorting (including Last Played) <!-- id: 12 -->
+- [x] Verify build and functionality (build, scan, manual test) <!-- id: 9 -->
+- [ ] Database Schema Setup for Subtitles, Specs, and Playlists (DbInitializer.cs) <!-- id: 13 -->
+- [ ] Implement Subtitle Discovery & extraction logic (DirectoryScannerService.cs) <!-- id: 14 -->
+- [ ] Implement Technical Specs parsing via ffprobe (DirectoryScannerService.cs) <!-- id: 15 -->
+- [ ] Add REST API Endpoints for Subtitles, Specs, and Playlists (Program.cs) <!-- id: 16 -->
+- [ ] Build Subtitles cc tracks selector overlay in player (app.js/style.css) <!-- id: 17 -->
+- [ ] Build Technical Media Inspector modal (app.js/style.css/index.html) <!-- id: 18 -->
+- [ ] Implement Playlists Tab, list manager, and autoplay player queues (app.js/index.html) <!-- id: 19 -->
+- [ ] Build verification and manual test run <!-- id: 20 -->

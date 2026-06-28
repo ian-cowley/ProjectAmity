@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Amity - Local Media Server</title>
+    <!-- Local Bootstrap 5 CSS -->
+    <link rel="stylesheet" href="lib/bootstrap/css/bootstrap.min.css">
+    <!-- Google Fonts: Outfit for sleek, modern typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="css/style.css?v=2072">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg border-bottom border-secondary-subtle py-3 px-4 mb-4">
+        <div class="container-fluid px-0">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                <span class="brand-glow">AMITY</span>
+                <span class="badge text-bg-primary fs-8 fw-semibold">LOCAL</span>
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <button id="btn-about" class="btn btn-outline-light btn-sm px-3 nav-btn" tabindex="0">
+                    ℹ️ About
+                </button>
+                <button id="btn-settings" class="btn btn-outline-light btn-sm px-3 nav-btn" tabindex="0">
+                    ⚙️ Settings
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <div class="container-fluid px-4 pb-5">
+        
+        <!-- Library Category Toggles & Controls -->
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <div class="d-flex gap-3">
+                <button id="tab-home" class="btn btn-category active" data-filter="home">Home</button>
+                <button id="tab-movies" class="btn btn-category" data-filter="Movie">Movies</button>
+                <button id="tab-episodes" class="btn btn-category" data-filter="Episode">TV Shows</button>
+            </div>
+            <!-- Dynamic Thumbnail Resizer Slider -->
+            <div id="size-slider-container" class="d-flex align-items-center gap-2 text-secondary d-none">
+                <span class="fs-8">📁 Small</span>
+                <input type="range" id="thumbnail-size-slider" min="110" max="240" value="180" step="10" style="width: 100px; cursor: pointer; accent-color: var(--accent-blue);">
+                <span class="fs-8">Large 📂</span>
+            </div>
+        </div>
+
+        <!-- Home View Container -->
+        <div id="home-view" class="media-section">
+            <!-- Continue Watching Row -->
+            <div id="continue-watching-section" class="mb-5 d-none">
+                <h2 class="fs-4 fw-bold mb-3 text-white text-uppercase tracking-wider d-flex align-items-center gap-2">
+                    <span>⏱️</span> Continue Watching
+                </h2>
+                <div id="continue-watching-grid" class="media-grid-dynamic">
+                    <!-- Continue watching cards here -->
+                </div>
+            </div>
+
+            <!-- Recently Added Row -->
+            <div id="recently-added-section">
+                <h2 class="fs-4 fw-bold mb-3 text-white text-uppercase tracking-wider d-flex align-items-center gap-2">
+                    <span>✨</span> Recently Added
+                </h2>
+                <div id="recently-added-grid" class="media-grid-dynamic">
+                    <!-- Recently added cards here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Library View Container -->
+        <div id="library-view" class="media-section d-none">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h2 id="section-title" class="fs-4 fw-bold text-secondary text-uppercase tracking-wider m-0">Library</h2>
+                
+                <!-- Sub navigation tabs -->
+                <div class="d-flex gap-2 align-items-center" id="library-controls-wrapper">
+                    <div id="library-sort-container" class="d-none me-2">
+                        <select id="library-sort-select" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 nav-details-action" style="width: 160px; cursor: pointer;" tabindex="0">
+                            <option value="title-asc">Title (A-Z)</option>
+                            <option value="title-desc">Title (Z-A)</option>
+                            <option value="year-desc">Year (Newest)</option>
+                            <option value="year-asc">Year (Oldest)</option>
+                            <option value="date-desc">Date Added (Newest)</option>
+                            <option value="played-desc">Last Played</option>
+                        </select>
+                    </div>
+                    <button id="btn-shuffle-library" class="btn btn-sm btn-outline-light px-3 d-none nav-btn" tabindex="0">
+                        🔀 Play Random
+                    </button>
+                    <div class="d-flex gap-2" id="sub-navigation-tabs">
+                        <button id="sub-tab-library" class="btn btn-sm btn-outline-light px-3 active" data-sub-tab="library">Library</button>
+                        <button id="sub-tab-categories" class="btn btn-sm btn-outline-light px-3" data-sub-tab="categories">Categories</button>
+                        <button id="sub-tab-collections" class="btn btn-sm btn-outline-light px-3 d-none" data-sub-tab="collections">Collections</button>
+                        <button id="sub-tab-playlists" class="btn btn-sm btn-outline-light px-3" data-sub-tab="playlists">Playlists</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="empty-state" class="d-none text-center my-5 py-5 border border-secondary border-dashed rounded-4">
+                <div class="fs-1 mb-3 text-muted">🎬</div>
+                <h4 class="fw-semibold">No Media Found</h4>
+                <p class="text-secondary mb-4">Open Settings to add your media directories and run a catalog scan.</p>
+                <button id="btn-go-settings" class="btn btn-primary px-4">Open Settings</button>
+            </div>
+
+            <!-- Library Grid -->
+            <div id="media-grid" class="media-grid-dynamic">
+                <!-- Media Cards will be injected here dynamically -->
+            </div>
+
+            <!-- Categories Grid -->
+            <div id="categories-grid" class="d-none" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem;">
+                <!-- Category tiles injected here -->
+            </div>
+
+            <!-- Collections Grid -->
+            <div id="collections-grid" class="d-none">
+                <div id="collections-list-view">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="fs-5 text-white m-0">My Collections</h3>
+                        <button id="btn-create-collection" class="btn btn-sm btn-primary px-3">➕ Create Collection</button>
+                    </div>
+                    <div id="collections-list-grid" class="media-grid-dynamic">
+                        <!-- Collection cards -->
+                    </div>
+                </div>
+                <div id="collection-detail-view" class="d-none">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <button id="btn-back-to-collections" class="btn btn-sm btn-outline-light px-3">◀ Back to Collections</button>
+                        <h3 id="collection-detail-title" class="fs-4 text-white m-0">Collection Name</h3>
+                        <button id="btn-delete-collection" class="btn btn-sm btn-danger px-3 ms-auto">🗑️ Delete Collection</button>
+                    </div>
+                    <p id="collection-detail-overview" class="text-secondary mb-4"></p>
+                    <div id="collection-detail-grid" class="media-grid-dynamic">
+                        <!-- Collection movies -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Playlists Grid -->
+            <div id="playlists-grid" class="d-none">
+                <div id="playlists-list-view">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="fs-5 text-white m-0">My Playlists</h3>
+                        <button id="btn-create-playlist" class="btn btn-sm btn-primary px-3">➕ Create Playlist</button>
+                    </div>
+                    <div id="playlists-list-grid" class="media-grid-dynamic">
+                        <!-- Playlist cards -->
+                    </div>
+                </div>
+                <div id="playlist-detail-view" class="d-none">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <button id="btn-back-to-playlists" class="btn btn-sm btn-outline-light px-3">◀ Back to Playlists</button>
+                        <h3 id="playlist-detail-title" class="fs-4 text-white m-0">Playlist Name</h3>
+                        <button id="btn-play-playlist" class="btn btn-sm btn-success px-3 ms-3 nav-btn">▶ Play Playlist</button>
+                        <button id="btn-delete-playlist" class="btn btn-sm btn-danger px-3 ms-auto nav-btn">🗑️ Delete Playlist</button>
+                    </div>
+                    <p id="playlist-detail-overview" class="text-secondary mb-4"></p>
+                    <div id="playlist-detail-grid" class="media-grid-dynamic">
+                        <!-- Playlist items -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen About Panel Overlay -->
+    <div id="about-overlay" class="settings-overlay d-none">
+        <div class="settings-container" style="max-width: 500px; background: linear-gradient(135deg, rgba(20, 21, 28, 0.98) 0%, rgba(10, 11, 15, 0.98) 100%);">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                <h2 class="fs-4 fw-bold mb-0 text-white">ℹ️ About Project Amity</h2>
+                <button id="btn-close-about-x" class="btn btn-link text-white text-decoration-none fs-4 p-0 line-height-1" aria-label="Close About">✕</button>
+            </div>
+            
+            <div class="text-center py-4 px-2">
+                <div class="brand-glow fs-1 fw-bold tracking-wider mb-3">AMITY</div>
+                <p class="text-light fs-6 lh-lg mb-4">
+                    A nod to <strong>Jaws</strong>—a localized environment with plenty of action under the surface.
+                </p>
+            </div>
+
+            <div class="d-flex gap-2 border-top border-secondary pt-3 mt-2">
+                <button id="btn-close-about-ok" class="btn btn-primary btn-sm flex-grow-1 nav-about-action" tabindex="0">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Settings Panel Overlay -->
+    <div id="settings-overlay" class="settings-overlay d-none">
+        <div class="settings-container">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                <h2 class="fs-3 fw-bold mb-0">⚙️ Server Settings</h2>
+                <button id="btn-close-settings-x" class="btn btn-link text-white text-decoration-none fs-4 p-0 line-height-1" aria-label="Close Settings">✕</button>
+            </div>
+
+            <div class="row g-4">
+                <!-- Left: Folder Setup -->
+                <div class="col-lg-7 d-flex flex-column gap-4">
+                    <!-- Movies Folders Setup -->
+                    <div class="card bg-card border-secondary p-3">
+                        <h3 class="fs-5 fw-bold text-danger mb-3">🎬 Movie Folders</h3>
+                        <div class="folder-list mb-3" id="movie-folder-list">
+                            <!-- Movie folders rendered here -->
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="input-movie-path" class="form-control form-control-sm nav-input" placeholder="e.g. C:\Media\Movies" tabindex="0">
+                            <button id="btn-browse-movie" class="btn btn-outline-secondary btn-sm nav-btn-action" type="button" tabindex="0">Browse...</button>
+                            <button id="btn-add-movie-path" class="btn btn-danger btn-sm nav-btn-action" type="button" tabindex="0">Add</button>
+                        </div>
+                    </div>
+
+                    <!-- TV Shows Folders Setup -->
+                    <div class="card bg-card border-secondary p-3">
+                        <h3 class="fs-5 fw-bold text-success mb-3">📺 TV Show Folders</h3>
+                        <div class="folder-list mb-3" id="tv-folder-list">
+                            <!-- TV folders rendered here -->
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="input-tv-path" class="form-control form-control-sm nav-input" placeholder="e.g. C:\Media\TV" tabindex="0">
+                            <button id="btn-browse-tv" class="btn btn-outline-secondary btn-sm nav-btn-action" type="button" tabindex="0">Browse...</button>
+                            <button id="btn-add-tv-path" class="btn btn-success btn-sm nav-btn-action" type="button" tabindex="0">Add</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: General Settings Card -->
+                <div class="col-lg-5">
+                    <div class="card bg-card border-secondary p-3 h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <h3 class="fs-5 fw-bold text-primary mb-3">⚙️ General Settings</h3>
+                            
+                            <div class="mb-3">
+                                <label for="settings-default-transcode" class="form-label text-secondary fs-8 fw-semibold text-uppercase tracking-wider">Default Transcode Quality</label>
+                                <select id="settings-default-transcode" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 nav-details-action">
+                                    <option value="original">Original (Direct Play)</option>
+                                    <option value="1080p">1080p (Transcode)</option>
+                                    <option value="720p">720p (Transcode)</option>
+                                    <option value="480p">480p (Transcode)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="settings-metadata-language" class="form-label text-secondary fs-8 fw-semibold text-uppercase tracking-wider">Metadata Scraper Language</label>
+                                <select id="settings-metadata-language" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 nav-details-action">
+                                    <option value="en-US">English (United States)</option>
+                                    <option value="en-GB">English (United Kingdom)</option>
+                                    <option value="es-ES">Español (España)</option>
+                                    <option value="fr-FR">Français (France)</option>
+                                    <option value="de-DE">Deutsch (Deutschland)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="settings-ui-theme" class="form-label text-secondary fs-8 fw-semibold text-uppercase tracking-wider">UI Theme</label>
+                                <select id="settings-ui-theme" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 nav-details-action">
+                                    <option value="amity-dark">Amity Dark (Sleek Obsidian)</option>
+                                    <option value="plex-gold">Plex Gold (Cinematic Amber)</option>
+                                    <option value="midnight-blue">Midnight Blue (Deep Ocean)</option>
+                                    <option value="emerald-glass">Emerald Glass (Glowing Neon)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="settings-auto-collections">
+                                <label class="form-check-label text-white fs-7" for="settings-auto-collections">Auto-Create Collections</label>
+                                <div class="text-secondary fs-8">Automatically group films into TMDB Box Sets.</div>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="settings-auto-scan">
+                                <label class="form-check-label text-white fs-7" for="settings-auto-scan">Scan on Startup</label>
+                                <div class="text-secondary fs-8">Perform library scan automatically on application boot.</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <button id="btn-save-settings" class="btn btn-primary btn-sm w-100 nav-btn-action" tabindex="0">
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scanner Trigger Controls -->
+                <div class="col-12 mt-4 border-top border-secondary pt-4">
+                    <button id="btn-trigger-scan" class="btn btn-primary btn-lg w-100 mb-3 nav-btn-action" tabindex="0">
+                        🚀 Start Library Scan
+                    </button>
+                    
+                    <!-- Scanner Progress Spinner -->
+                    <div id="scanner-progress" class="text-center py-2 text-secondary d-none">
+                        <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
+                        <span class="fw-semibold">Scanning configured directories recursively...</span>
+                    </div>
+                    
+                    <button id="btn-close-settings" class="btn btn-outline-secondary w-100 nav-btn-action mt-2" tabindex="0">
+                        Back to Library
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Folder Picker Dialog Overlay -->
+    <div id="folder-picker-overlay" class="folder-picker-overlay d-none">
+        <div class="folder-picker-container">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3">
+                <h3 class="fs-5 fw-bold mb-0">📁 Folder Browser</h3>
+                <button id="btn-close-folder-picker-x" class="btn btn-link text-white text-decoration-none fs-5 p-0 line-height-1" aria-label="Close Browser">✕</button>
+            </div>
+            
+            <div class="mb-3">
+                <label class="text-secondary fs-8 mb-1">Current Directory</label>
+                <div id="folder-picker-current-path" class="bg-black text-white p-2 rounded fs-7 border border-secondary font-monospace overflow-x-auto text-nowrap">
+                    (Loading...)
+                </div>
+            </div>
+
+            <div class="folder-picker-list mb-3" id="folder-picker-list">
+                <!-- Subdirectories listed here -->
+            </div>
+
+            <div class="d-flex gap-2">
+                <button id="btn-select-folder" class="btn btn-primary btn-sm flex-grow-1 nav-folder-action" tabindex="0">Select Folder</button>
+                <button id="btn-close-folder-picker" class="btn btn-outline-secondary btn-sm flex-grow-1 nav-folder-action" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Details Dialog Overlay -->
+    <div id="details-overlay" class="details-overlay d-none">
+        <div class="details-wrapper">
+            <!-- Close button -->
+            <button id="btn-close-details" class="btn-close-details" aria-label="Close Details">✕</button>
+            
+            <div class="details-container">
+                <div class="row g-4">
+                    <!-- Left: Poster Column -->
+                    <div class="col-md-4 text-center">
+                        <div class="details-poster-wrapper">
+                            <img id="details-poster" src="" alt="Poster" class="img-fluid rounded shadow-lg border border-secondary border-opacity-20">
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Info Column -->
+                    <div class="col-md-8 text-start d-flex flex-column justify-content-between">
+                        <div>
+                            <!-- Title & Year -->
+                            <h2 id="details-title" class="fs-2 fw-bold text-white mb-2">Show Title</h2>
+                            
+                            <!-- Badges (Year, Genres, Duration) -->
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <span id="details-year-badge" class="badge bg-secondary bg-opacity-30 border border-secondary border-opacity-30 text-white-50">2024</span>
+                                <span id="details-genres-badge" class="badge bg-primary bg-opacity-20 border border-primary border-opacity-30 text-info">Action, Drama</span>
+                                <span id="details-duration-badge" class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-20 d-none">2h 15m</span>
+                            </div>
+                            
+                            <!-- Synopsis -->
+                            <div class="mb-4">
+                                <h4 class="fs-6 text-secondary text-uppercase tracking-wider fw-semibold mb-2">Synopsis</h4>
+                                <div id="details-overview" class="text-white-50 leading-relaxed fs-7 max-height-120 overflow-y-auto">
+                                    No description available.
+                                </div>
+                            </div>
+                            
+                            <!-- Director (Only for Movies) -->
+                            <div id="details-director-container" class="mb-4 d-none">
+                                <h4 class="fs-6 text-secondary text-uppercase tracking-wider fw-semibold mb-1">Director</h4>
+                                <p id="details-director" class="text-white fw-medium fs-7">Unknown Director</p>
+                            </div>
+
+                            <!-- Collections (Only for Movies) -->
+                            <div id="details-collections-container" class="mb-4 d-none">
+                                <h4 class="fs-6 text-secondary text-uppercase tracking-wider fw-semibold mb-1">Collections</h4>
+                                <p id="details-collections-text" class="text-white fw-medium fs-7">None</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Bottom Action Buttons and Cast -->
+                        <div>
+                            <!-- Action buttons (like Play Movie) -->
+                            <div id="details-movie-actions" class="mb-4 d-none">
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <button id="btn-resume-movie" class="btn-details-primary nav-details-action d-none" tabindex="0">
+                                        ▶ Resume from 00:00
+                                    </button>
+                                    <button id="btn-play-movie" class="btn-details-primary nav-details-action" tabindex="0">
+                                        ▶ Play Movie
+                                    </button>
+                                    <button id="btn-toggle-watched" class="btn-details-secondary btn-details-icon nav-details-action" title="Mark Played" tabindex="0">
+                                        ✓
+                                    </button>
+                                    <button id="btn-get-info" class="btn-details-secondary btn-details-icon nav-details-action" title="Get Info" tabindex="0">
+                                        ℹ
+                                    </button>
+                                    <button id="btn-edit-metadata" class="btn-details-secondary btn-details-icon nav-details-action" title="Edit Details" tabindex="0">
+                                        ✏️
+                                    </button>
+                                    
+                                    <!-- Add to Collection Dropdown -->
+                                    <div class="dropdown" id="dropdown-add-collection-container">
+                                        <button class="btn-details-secondary btn-details-icon nav-details-action dropdown-toggle" type="button" id="btn-dropdown-collection" data-bs-toggle="dropdown" aria-expanded="false" title="Add to Collection" tabindex="0">
+                                            📁
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-dark p-2" aria-labelledby="btn-dropdown-collection" style="min-width: 225px; z-index: 6000;">
+                                            <div id="details-collections-list" class="max-height-150 overflow-y-auto mb-2">
+                                                <!-- Checkboxes for collections -->
+                                            </div>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <div class="input-group input-group-sm px-1">
+                                                <input type="text" id="input-new-collection" class="form-control bg-dark border-secondary text-white" placeholder="New Collection..." aria-label="New Collection">
+                                                <button class="btn btn-primary" type="button" id="btn-add-to-new-collection">Add</button>
+                                            </div>
+                                        </ul>
+                                    </div>
+
+                                    <!-- Add to Playlist Dropdown -->
+                                    <div class="dropdown" id="dropdown-add-playlist-container">
+                                        <button class="btn-details-secondary btn-details-icon nav-details-action dropdown-toggle" type="button" id="btn-dropdown-playlist" data-bs-toggle="dropdown" aria-expanded="false" title="Add to Playlist" tabindex="0">
+                                            ➕
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-dark p-2" aria-labelledby="btn-dropdown-playlist" style="min-width: 225px; z-index: 6000;">
+                                            <div id="details-playlists-list" class="max-height-150 overflow-y-auto mb-2">
+                                                <!-- Checkboxes for playlists -->
+                                            </div>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <div class="input-group input-group-sm px-1">
+                                                <input type="text" id="input-new-playlist" class="form-control bg-dark border-secondary text-white" placeholder="New Playlist..." aria-label="New Playlist">
+                                                <button class="btn btn-primary" type="button" id="btn-add-to-new-playlist">Add</button>
+                                            </div>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Cast & Crew circular scrolling view -->
+                            <div>
+                                <h4 class="fs-6 text-secondary text-uppercase tracking-wider fw-semibold mb-2">Cast & Crew</h4>
+                                <div id="details-cast-row" class="d-flex gap-3 overflow-x-auto pb-2 cast-scroller">
+                                    <!-- Actor bubbles listed here -->
+                                </div>
+                            </div>
+                        </div>
+                </div>
+            </div>
+
+                <!-- TV Seasons list / Episodes Selector (Only for TV Shows) - Moved outside for full-width landscape grid layout -->
+                <div id="details-tv-container" class="mt-4 pt-4 border-top border-secondary border-opacity-20 d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h4 id="details-episode-count-title" class="fs-5 text-white fw-bold mb-0">8 Episodes</h4>
+                        <select id="details-season-select" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 w-auto fs-8 nav-details-action" tabindex="0">
+                            <!-- Season options populated here -->
+                        </select>
+                    </div>
+                    <div id="details-episode-list" class="episode-horizontal-scroller d-flex gap-3 overflow-x-auto pb-3">
+                        <!-- Episodes dynamically rendered as beautiful 16:9 cards here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Player Fullscreen Overlay -->
+    <div id="player-overlay" class="player-overlay d-none">
+        <button id="btn-close-player" class="btn-close-player" aria-label="Close Player">✕</button>
+        
+        <!-- Quality & Subtitle Controls -->
+        <div class="player-quality-container d-flex gap-2">
+            <select id="player-subtitle-select" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 w-auto fs-8" tabindex="0">
+                <option value="none">Subtitles: None</option>
+            </select>
+            <select id="player-quality-select" class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-30 w-auto fs-8" tabindex="0">
+                <option value="original">Original (Direct Play)</option>
+                <option value="1080p">1080p (Transcode)</option>
+                <option value="720p">720p (Transcode)</option>
+                <option value="480p">480p (Transcode)</option>
+            </select>
+        </div>
+
+        <!-- Skip Chapter Button -->
+        <button id="btn-skip-chapter" class="btn btn-skip-chapter d-none" tabindex="0">
+            ⏩ Skip Intro
+        </button>
+        
+        <!-- Play Random Toast Notification -->
+        <div id="shuffle-toast" class="shuffle-toast d-none">
+            <div class="shuffle-toast-content">
+                <span class="shuffle-toast-label">PLAYING RANDOM</span>
+                <div class="shuffle-toast-title" id="shuffle-toast-title">Movie Title</div>
+            </div>
+            <div class="shuffle-toast-actions">
+                <button id="btn-shuffle-next" class="btn btn-sm btn-primary">Next 🔀</button>
+                <button id="btn-shuffle-close" class="btn btn-sm btn-outline-light">✕</button>
+            </div>
+        </div>
+
+        <div class="player-wrapper">
+            <video id="media-player" class="w-100 h-100" controls autoplay>
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+
+    <!-- Alphabet Quick Navigation Sidebar -->
+    <div id="alphabet-sidebar" class="alphabet-sidebar d-none">
+        <div class="alphabet-item" data-letter="#">#</div>
+        <div class="alphabet-item" data-letter="A">A</div>
+        <div class="alphabet-item" data-letter="B">B</div>
+        <div class="alphabet-item" data-letter="C">C</div>
+        <div class="alphabet-item" data-letter="D">D</div>
+        <div class="alphabet-item" data-letter="E">E</div>
+        <div class="alphabet-item" data-letter="F">F</div>
+        <div class="alphabet-item" data-letter="G">G</div>
+        <div class="alphabet-item" data-letter="H">H</div>
+        <div class="alphabet-item" data-letter="I">I</div>
+        <div class="alphabet-item" data-letter="J">J</div>
+        <div class="alphabet-item" data-letter="K">K</div>
+        <div class="alphabet-item" data-letter="L">L</div>
+        <div class="alphabet-item" data-letter="M">M</div>
+        <div class="alphabet-item" data-letter="N">N</div>
+        <div class="alphabet-item" data-letter="O">O</div>
+        <div class="alphabet-item" data-letter="P">P</div>
+        <div class="alphabet-item" data-letter="Q">Q</div>
+        <div class="alphabet-item" data-letter="R">R</div>
+        <div class="alphabet-item" data-letter="S">S</div>
+        <div class="alphabet-item" data-letter="T">T</div>
+        <div class="alphabet-item" data-letter="U">U</div>
+        <div class="alphabet-item" data-letter="V">V</div>
+        <div class="alphabet-item" data-letter="W">W</div>
+        <div class="alphabet-item" data-letter="X">X</div>
+        <div class="alphabet-item" data-letter="Y">Y</div>
+        <div class="alphabet-item" data-letter="Z">Z</div>
+    </div>
+
+    <!-- Media Technical Info Inspector Modal -->
+    <div id="specs-overlay" class="metadata-editor-overlay d-none">
+        <div class="metadata-editor-container" style="max-width: 500px;">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                <h2 class="fs-4 fw-bold mb-0">ℹ Media File Specifications</h2>
+                <button id="btn-close-specs-x" class="btn btn-link text-white text-decoration-none fs-4 p-0 line-height-1" aria-label="Close Specs">✕</button>
+            </div>
+            
+            <div class="specs-details-list" id="specs-details-list" style="max-height: 400px; overflow-y: auto;">
+                <!-- Specs rows injected here -->
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+                <button type="button" id="btn-close-specs" class="btn btn-outline-secondary btn-lg w-100 nav-specs-action" tabindex="0">Close Specs</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata Editor Overlay -->
+    <div id="metadata-editor-overlay" class="metadata-editor-overlay d-none">
+        <div class="metadata-editor-container">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                <h2 class="fs-4 fw-bold mb-0">✏️ Edit Media Details</h2>
+                <button id="btn-close-editor-x" class="btn btn-link text-white text-decoration-none fs-4 p-0 line-height-1" aria-label="Close Editor">✕</button>
+            </div>
+            <form id="metadata-editor-form">
+                <div class="mb-3">
+                    <label for="edit-title" class="form-label text-secondary fs-8 fw-semibold text-uppercase">Title</label>
+                    <input type="text" id="edit-title" class="form-control bg-dark border-secondary text-white" required>
+                </div>
+                <div class="mb-3">
+                    <label for="edit-overview" class="form-label text-secondary fs-8 fw-semibold text-uppercase">Overview</label>
+                    <textarea id="edit-overview" class="form-control bg-dark border-secondary text-white" rows="4"></textarea>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="edit-release-year" class="form-label text-secondary fs-8 fw-semibold text-uppercase">Release Year</label>
+                        <input type="number" id="edit-release-year" class="form-control bg-dark border-secondary text-white">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="edit-director" class="form-label text-secondary fs-8 fw-semibold text-uppercase">Director</label>
+                        <input type="text" id="edit-director" class="form-control bg-dark border-secondary text-white">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="edit-genres" class="form-label text-secondary fs-8 fw-semibold text-uppercase">Genres (comma-separated)</label>
+                    <input type="text" id="edit-genres" class="form-control bg-dark border-secondary text-white">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-poster-path" class="form-label text-secondary fs-8 fw-semibold text-uppercase">Poster Path / URL</label>
+                    <input type="text" id="edit-poster-path" class="form-control bg-dark border-secondary text-white">
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" id="btn-save-metadata" class="btn btn-primary btn-lg flex-grow-1">Save Details</button>
+                    <button type="button" id="btn-cancel-metadata" class="btn btn-outline-secondary btn-lg flex-grow-1">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- General UI Toast Notification -->
+    <div id="general-toast" class="general-toast d-none">
+        <span id="general-toast-message">Toast Message</span>
+    </div>
+
+    <!-- Local Bootstrap 5 Bundle JS -->
+    <script src="lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <!-- Application Logic -->
+    <script src="js/app.js?v=2076"></script>
+    <!-- Keyboard/Remote Navigation Loop -->
+    <script src="js/remote-navigation.js?v=2076"></script>
+</body>
+</html>
