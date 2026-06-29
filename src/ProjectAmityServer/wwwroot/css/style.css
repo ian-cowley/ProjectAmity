@@ -1385,3 +1385,8 @@ body[style*="overflow: hidden"] > *:not(.details-overlay):not(.player-overlay):n
     color: #fff !important;
 }
 
+/* Fix Match Overlay Specific z-index override */
+#fix-match-overlay {
+    z-index: 6200 !important;
+}
+
