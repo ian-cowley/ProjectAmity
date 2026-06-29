@@ -1226,12 +1226,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     openMovieDetails(updatedMovie);
                 }
             } else if (matchType === 'tv') {
-                const getTvRes = await fetch(`/api/tvshows/${matchId}`);
-                if (getTvRes.ok) {
-                    const updatedTv = await getTvRes.json();
-                    closeDetails();
-                    openTvShowDetails(updatedTv);
-                }
+                closeDetails();
+                openTvShowDetails(matchId);
             }
 
             loadMediaLibrary();
