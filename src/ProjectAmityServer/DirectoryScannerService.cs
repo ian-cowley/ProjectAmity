@@ -545,16 +545,20 @@ namespace ProjectAmityServer
                 }
 
                 var existingItems = await _db.ExecuteQueryAsync(
-                    "SELECT TvShowId FROM MediaItems WHERE FilePath LIKE @Pattern AND TvShowId IS NOT NULL",
-                    new Dictionary<string, object?> { { "@Pattern", searchPattern + "%" } }
+                    "SELECT FilePath, TvShowId FROM MediaItems WHERE TvShowId IS NOT NULL"
                 );
 
-                if (existingItems.Count > 0)
+                var folderMatch = existingItems.Find(item =>
                 {
-                    var firstMatch = existingItems[0];
-                    if (firstMatch["TvShowId"] != null && firstMatch["TvShowId"] is not DBNull)
+                    string path = item["FilePath"]?.ToString() ?? "";
+                    return path.StartsWith(searchPattern, StringComparison.OrdinalIgnoreCase);
+                });
+
+                if (folderMatch != null)
+                {
+                    if (folderMatch["TvShowId"] != null && folderMatch["TvShowId"] is not DBNull)
                     {
-                        int existingShowId = Convert.ToInt32(firstMatch["TvShowId"]);
+                        int existingShowId = Convert.ToInt32(folderMatch["TvShowId"]);
                         var verifyShow = await _db.ExecuteQueryAsync(
                             "SELECT Id, TvmazeId FROM TvShows WHERE Id = @Id",
                             new Dictionary<string, object?> { { "@Id", existingShowId } }

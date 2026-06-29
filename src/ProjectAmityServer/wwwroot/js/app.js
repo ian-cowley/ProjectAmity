@@ -1196,6 +1196,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function applyMetadataMatch(externalId) {
         if (!activeMatchId || !activeMatchType || !externalId) return;
 
+        const matchId = activeMatchId;
+        const matchType = activeMatchType;
+
         showToast("🦈 Syncing metadata under the surface...");
         closeFixMatch();
 
@@ -1204,8 +1207,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    mediaId: activeMatchId,
-                    type: activeMatchType,
+                    mediaId: matchId,
+                    type: matchType,
                     externalId: externalId
                 })
             });
@@ -1215,15 +1218,15 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("✅ Metadata successfully updated!");
             
             // Refresh details page
-            if (activeMatchType === 'movie') {
-                const getMovieRes = await fetch(`/api/media/${activeMatchId}`);
+            if (matchType === 'movie') {
+                const getMovieRes = await fetch(`/api/media/${matchId}`);
                 if (getMovieRes.ok) {
                     const updatedMovie = await getMovieRes.json();
                     closeDetails();
                     openMovieDetails(updatedMovie);
                 }
-            } else if (activeMatchType === 'tv') {
-                const getTvRes = await fetch(`/api/tvshows/${activeMatchId}`);
+            } else if (matchType === 'tv') {
+                const getTvRes = await fetch(`/api/tvshows/${matchId}`);
                 if (getTvRes.ok) {
                     const updatedTv = await getTvRes.json();
                     closeDetails();
