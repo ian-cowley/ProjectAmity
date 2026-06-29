@@ -118,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnFixMatchSearch = document.getElementById('btn-fix-match-search');
     const fixMatchLoader = document.getElementById('fix-match-loader');
     const fixMatchResults = document.getElementById('fix-match-results');
+    const btnDeleteItem = document.getElementById('btn-delete-item');
     const shuffleToast = document.getElementById('shuffle-toast');
     const shuffleToastTitle = document.getElementById('shuffle-toast-title');
     const btnShuffleNext = document.getElementById('btn-shuffle-next');
@@ -1238,6 +1239,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function deleteActiveItem() {
+        let itemId = null;
+        let deleteUrl = null;
+        let displayName = '';
+
+        if (activeMovieItem) {
+            itemId = activeMovieItem.id;
+            deleteUrl = `/api/media/${itemId}`;
+            displayName = activeMovieItem.title;
+        } else if (activeTvShowItem) {
+            itemId = activeTvShowItem.id;
+            deleteUrl = `/api/tvshows/${itemId}`;
+            displayName = activeTvShowItem.title;
+        } else {
+            console.error("No active item to delete.");
+            return;
+        }
+
+        const confirmMsg = `Are you sure you want to remove "${displayName}" from your library?\n\n(This will not delete the physical file on disk.)`;
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(deleteUrl, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Delete failed');
+
+            showToast(`🗑️ "${displayName}" removed successfully.`);
+            closeDetails();
+            loadMediaLibrary();
+        } catch (err) {
+            console.error('Error deleting media item:', err);
+            showToast(`❌ Error: ${err.message}`);
+        }
+    }
+
     function formatDurationLabel(totalSeconds) {
         if (!totalSeconds || totalSeconds <= 0) return '';
         const hrs = Math.floor(totalSeconds / 3600);
@@ -1817,6 +1854,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    if (btnDeleteItem) btnDeleteItem.addEventListener('click', deleteActiveItem);
 
     btnSettings.addEventListener('click', openSettings);
     btnGoSettings.addEventListener('click', openSettings);

@@ -589,10 +589,34 @@ namespace ProjectAmityServer
             {
                 try
                 {
+                    // 1. Get the TvShowId if this is an episode
+                    string getTvShowIdQuery = "SELECT TvShowId FROM MediaItems WHERE Id = @Id";
+                    var result = await db.ExecuteQueryAsync(getTvShowIdQuery, new Dictionary<string, object?> { { "@Id", id } });
+                    int? tvShowId = null;
+                    if (result.Count > 0 && result[0]["TvShowId"] != null && result[0]["TvShowId"] is not DBNull)
+                    {
+                        tvShowId = Convert.ToInt32(result[0]["TvShowId"]);
+                    }
+
+                    // 2. Delete the media item
                     string query = "DELETE FROM MediaItems WHERE Id = @Id";
                     int rows = await db.ExecuteNonQueryAsync(query, new Dictionary<string, object?> { { "@Id", id } });
+                    
                     if (rows > 0)
                     {
+                        // 3. If it was an episode, check if the parent show is now empty
+                        if (tvShowId.HasValue)
+                        {
+                            int count = Convert.ToInt32(await db.ExecuteScalarAsync(
+                                "SELECT COUNT(*) FROM MediaItems WHERE TvShowId = @TvShowId",
+                                new Dictionary<string, object?> { { "@TvShowId", tvShowId.Value } }
+                            ) ?? 0);
+
+                            if (count == 0)
+                            {
+                                await db.ExecuteNonQueryAsync("DELETE FROM TvShows WHERE Id = @Id", new Dictionary<string, object?> { { "@Id", tvShowId.Value } });
+                            }
+                        }
                         return Results.NoContent();
                     }
                     return Results.NotFound($"Media item with ID {id} not found.");
@@ -600,6 +624,32 @@ namespace ProjectAmityServer
                 catch (Exception ex)
                 {
                     app.Logger.LogError(ex, $"Error deleting media item {id}");
+                    return Results.Problem("Database delete failed.");
+                }
+            });
+
+            // 5b. DELETE /api/tvshows/{id} - Remove TV show and all its episodes from index
+            app.MapDelete("/api/tvshows/{id}", async (int id, GlacierDbService db) =>
+            {
+                try
+                {
+                    // 1. Delete all episodes associated with this TV Show
+                    string deleteEpsQuery = "DELETE FROM MediaItems WHERE TvShowId = @ShowId";
+                    await db.ExecuteNonQueryAsync(deleteEpsQuery, new Dictionary<string, object?> { { "@ShowId", id } });
+
+                    // 2. Delete the TV Show itself
+                    string deleteShowQuery = "DELETE FROM TvShows WHERE Id = @Id";
+                    int rows = await db.ExecuteNonQueryAsync(deleteShowQuery, new Dictionary<string, object?> { { "@Id", id } });
+
+                    if (rows > 0)
+                    {
+                        return Results.NoContent();
+                    }
+                    return Results.NotFound($"TV show with ID {id} not found.");
+                }
+                catch (Exception ex)
+                {
+                    app.Logger.LogError(ex, $"Error deleting TV show {id}");
                     return Results.Problem("Database delete failed.");
                 }
             });

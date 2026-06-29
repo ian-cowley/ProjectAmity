@@ -207,9 +207,12 @@ namespace ProjectAmityServer
                     }
                 }
 
-                // Clean empty TV Shows
-                foreach (int showId in tvShowsToCheck)
+                // Clean empty TV Shows (all TV Shows in DB with 0 episodes)
+                var allShows = await _db.ExecuteQueryAsync("SELECT Id, Title FROM TvShows");
+                foreach (var showRow in allShows)
                 {
+                    int showId = Convert.ToInt32(showRow["Id"]);
+                    string showTitle = showRow["Title"]?.ToString() ?? "";
                     int count = Convert.ToInt32(await _db.ExecuteScalarAsync(
                         "SELECT COUNT(*) FROM MediaItems WHERE TvShowId = @TvShowId",
                         new Dictionary<string, object?> { { "@TvShowId", showId } }
@@ -217,7 +220,7 @@ namespace ProjectAmityServer
 
                     if (count == 0)
                     {
-                        _logger.LogInformation($"Show has no remaining episodes. Removing empty Show ID: {showId}");
+                        _logger.LogInformation($"Show '{showTitle}' has no remaining episodes. Removing empty Show ID: {showId}");
                         await _db.ExecuteNonQueryAsync("DELETE FROM TvShows WHERE Id = @Id", new Dictionary<string, object?> { { "@Id", showId } });
                     }
                 }
@@ -326,7 +329,7 @@ namespace ProjectAmityServer
 
                         if (string.IsNullOrWhiteSpace(showName)) showName = "Unknown Show";
 
-                        int tvShowId = await GetOrCreateTvShowIdAsync(showName);
+                        int tvShowId = await GetOrCreateTvShowIdAsync(showName, filePath);
                         string episodeTitle = $"{showName} - S{seasonNum:D2}E{episodeNum:D2}";
                         string episodeOverview = "";
                         string? episodeImage = null;
@@ -457,7 +460,7 @@ namespace ProjectAmityServer
 
                     if (string.IsNullOrWhiteSpace(showName)) showName = "Unknown Show";
 
-                    int tvShowId = await GetOrCreateTvShowIdAsync(showName);
+                    int tvShowId = await GetOrCreateTvShowIdAsync(showName, filePath);
                     
                     string episodeTitle = $"{showName} - S{seasonNum:D2}E{episodeNum:D2}";
                     string episodeOverview = "";
@@ -509,8 +512,71 @@ namespace ProjectAmityServer
             }
         }
 
-        private async Task<int> GetOrCreateTvShowIdAsync(string showName)
+        private string GetShowDirectoryPath(string filePath)
         {
+            try
+            {
+                var fileInfo = new FileInfo(filePath);
+                var parentDir = fileInfo.Directory;
+                if (parentDir != null)
+                {
+                    if (Regex.IsMatch(parentDir.Name, @"^(?:[sS]eason|[sS])\s*\d+$", RegexOptions.IgnoreCase))
+                    {
+                        var showDir = parentDir.Parent;
+                        if (showDir != null) return showDir.FullName;
+                    }
+                    return parentDir.FullName;
+                }
+            }
+            catch {}
+            return "";
+        }
+
+        private async Task<int> GetOrCreateTvShowIdAsync(string showName, string filePath)
+        {
+            // 0. Check if this episode is in a folder where other episodes already mapped to a TV Show ID
+            string showDirPath = GetShowDirectoryPath(filePath);
+            if (!string.IsNullOrEmpty(showDirPath))
+            {
+                string searchPattern = showDirPath;
+                if (!searchPattern.EndsWith(Path.DirectorySeparatorChar.ToString()))
+                {
+                    searchPattern += Path.DirectorySeparatorChar;
+                }
+
+                var existingItems = await _db.ExecuteQueryAsync(
+                    "SELECT TvShowId FROM MediaItems WHERE FilePath LIKE @Pattern AND TvShowId IS NOT NULL",
+                    new Dictionary<string, object?> { { "@Pattern", searchPattern + "%" } }
+                );
+
+                if (existingItems.Count > 0)
+                {
+                    var firstMatch = existingItems[0];
+                    if (firstMatch["TvShowId"] != null && firstMatch["TvShowId"] is not DBNull)
+                    {
+                        int existingShowId = Convert.ToInt32(firstMatch["TvShowId"]);
+                        var verifyShow = await _db.ExecuteQueryAsync(
+                            "SELECT Id, TvmazeId FROM TvShows WHERE Id = @Id",
+                            new Dictionary<string, object?> { { "@Id", existingShowId } }
+                        );
+                        if (verifyShow.Count > 0)
+                        {
+                            _logger.LogInformation($"Found existing TV Show ID {existingShowId} for folder: '{showDirPath}' based on database file mappings.");
+                            int? tvmazeId = verifyShow[0]["TvmazeId"] == null || verifyShow[0]["TvmazeId"] is DBNull ? null : Convert.ToInt32(verifyShow[0]["TvmazeId"]);
+                            if (tvmazeId.HasValue && !_showEpisodesCache.ContainsKey(existingShowId))
+                            {
+                                var eps = await _scraperService.FetchEpisodesListAsync(tvmazeId.Value);
+                                if (eps != null)
+                                {
+                                    _showEpisodesCache[existingShowId] = eps;
+                                }
+                            }
+                            return existingShowId;
+                        }
+                    }
+                }
+            }
+
             // 1. Look up existing show case-insensitively in C# to prevent duplicates
             var rows = await _db.ExecuteQueryAsync("SELECT Id, Title, TvmazeId FROM TvShows");
             var match = rows.Find(r => r["Title"]?.ToString().Equals(showName, StringComparison.OrdinalIgnoreCase) == true);

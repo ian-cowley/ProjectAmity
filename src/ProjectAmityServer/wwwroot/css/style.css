@@ -1390,3 +1390,15 @@ body[style*="overflow: hidden"] > *:not(.details-overlay):not(.player-overlay):n
     z-index: 6200 !important;
 }
 
+/* Delete button styling */
+.btn-delete-item {
+    border-color: rgba(220, 53, 69, 0.4) !important;
+    color: #dc3545 !important;
+}
+
+.btn-delete-item:hover, .btn-delete-item.focused {
+    background-color: #dc3545 !important;
+    color: #fff !important;
+    box-shadow: 0 0 12px rgba(220, 53, 69, 0.6) !important;
+}
+
