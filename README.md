@@ -25,7 +25,10 @@ Project Amity is a lightweight, localized media server and web client designed t
 
 ### 📁 Advanced Library Management
 * **Auto-Directory Scanner**: Recursively scans folders, parses titles and years, and resolves nested TV season/episode indexes.
+* **Self-Healing Folder Mapping**: Scanner tracks existing database mappings for TV series directories, ensuring that manually matched or renamed TV Shows do not result in duplicate series records during directory scans.
+* **Aggressive Empty Show Cleanup**: Automatically identifies and prunes TV Show catalog entries with zero episodes from the database index.
 * **Dynamic Scrapers**: Hydrates database items with overview summaries, genres, director lists, cast circles, and poster artwork using TMDB and TVmaze APIs.
+* **Fix Match & Metadata Editor**: Manually search and match wrong metadata by querying external TVmaze/TMDb identifiers, or directly override metadata values.
 * **Custom Playlists**: Create, rename, delete, and manually reorder playlist entries via interactive up/down sliders.
 * **Shuffle & Sort**: Sort libraries by Title, Release Year, Date Added, or Last Played. Toggle instant library shuffle.
 
@@ -83,6 +86,7 @@ Open this address in any modern web browser to access the Amity Dashboard!
 * `GET /api/media` - Get list of movies/episodes (optional filter: `mediaType`).
 * `GET /api/media/continue-watching` - Get active, partially-watched media sorted by last played.
 * `GET /api/media/{id}` - Get detailed specs and scraped metadata of a single media item.
+* `DELETE /api/media/{id}` - Manually remove a media item (movie or episode) from the library index.
 * `POST /api/media/{id}/resume` - Save client progress heartbeat (resume position in seconds).
 * `POST /api/media/{id}/duration` - Save total runtime duration.
 * `POST /api/media/{id}/watched` / `unwatched` - Mark item played/unplayed.
@@ -90,7 +94,12 @@ Open this address in any modern web browser to access the Amity Dashboard!
 ### TV Shows
 * `GET /api/tvshows` - Get list of TV shows.
 * `GET /api/tvshows/{showId}/episodes` - Get all episodes for a specific series.
+* `DELETE /api/tvshows/{id}` - Manually remove a TV series (and all its episodes) from the library index.
 * `POST /api/tvshows/{showId}/watched` / `unwatched` - Mark a whole series as played/unplayed.
+
+### Metadata Operations
+* `GET /api/metadata/search` - Search metadata candidates on TMDB or TVmaze.
+* `POST /api/metadata/match` - Match a local library item to an external media provider ID.
 
 ### Collections & Playlists
 * `GET /api/collections` - Get list of collections.
