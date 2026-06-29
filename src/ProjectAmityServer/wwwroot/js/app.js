@@ -108,6 +108,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailsCollectionsText = document.getElementById('details-collections-text');
 
     const btnShuffleLibrary = document.getElementById('btn-shuffle-library');
+
+    // Fix Match selectors
+    const btnFixMatch = document.getElementById('btn-fix-match');
+    const fixMatchOverlay = document.getElementById('fix-match-overlay');
+    const btnCloseFixMatchX = document.getElementById('btn-close-fix-match-x');
+    const btnCloseFixMatch = document.getElementById('btn-close-fix-match');
+    const inputFixMatchQuery = document.getElementById('input-fix-match-query');
+    const btnFixMatchSearch = document.getElementById('btn-fix-match-search');
+    const fixMatchLoader = document.getElementById('fix-match-loader');
+    const fixMatchResults = document.getElementById('fix-match-results');
     const shuffleToast = document.getElementById('shuffle-toast');
     const shuffleToastTitle = document.getElementById('shuffle-toast-title');
     const btnShuffleNext = document.getElementById('btn-shuffle-next');
@@ -1067,6 +1077,167 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.closeMetadataEditor = closeMetadataEditor;
 
+    // ==================== FIX MATCH / IDENTIFY LOGIC ====================
+    let activeMatchId = null;
+    let activeMatchType = null;
+
+    function openFixMatch() {
+        console.log("Opening Fix Match overlay.");
+        let title = '';
+        if (activeMovieItem) {
+            activeMatchType = 'movie';
+            activeMatchId = activeMovieItem.id;
+            title = activeMovieItem.title;
+        } else if (activeTvShowItem) {
+            activeMatchType = 'tv';
+            activeMatchId = activeTvShowItem.id;
+            title = activeTvShowItem.title;
+        } else {
+            console.error("No active item to fix match for.");
+            return;
+        }
+
+        inputFixMatchQuery.value = title;
+        fixMatchResults.innerHTML = '<p class="text-secondary text-center my-4">Search TMDb / TVmaze to find correct metadata match.</p>';
+        fixMatchLoader.classList.add('d-none');
+        fixMatchOverlay.classList.remove('d-none');
+
+        if (window.remoteNavigation) {
+            window.remoteNavigation.enterFixMatchMode();
+        }
+    }
+
+    function closeFixMatch() {
+        console.log("Closing Fix Match overlay.");
+        fixMatchOverlay.classList.add('d-none');
+        activeMatchId = null;
+        activeMatchType = null;
+
+        if (window.remoteNavigation) {
+            window.remoteNavigation.exitFixMatchMode();
+        }
+    }
+    window.closeFixMatch = closeFixMatch;
+
+    async function searchMatchMetadata() {
+        const query = inputFixMatchQuery.value.trim();
+        if (!query) return;
+
+        fixMatchLoader.classList.remove('d-none');
+        fixMatchResults.innerHTML = '';
+
+        try {
+            const url = `/api/metadata/search?query=${encodeURIComponent(query)}&mediaType=${activeMatchType}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Search failed');
+
+            const results = await response.json();
+            renderFixMatchResults(results);
+        } catch (err) {
+            console.error('Error searching metadata matches:', err);
+            fixMatchResults.innerHTML = `<p class="text-danger text-center my-4">Error: ${err.message}</p>`;
+        } finally {
+            fixMatchLoader.classList.add('d-none');
+        }
+    }
+
+    function renderFixMatchResults(results) {
+        fixMatchResults.innerHTML = '';
+        if (!results || results.length === 0) {
+            fixMatchResults.innerHTML = '<p class="text-secondary text-center my-4">No matching results found.</p>';
+            return;
+        }
+
+        results.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'd-flex gap-3 bg-dark bg-opacity-40 p-3 rounded border border-secondary border-opacity-10 align-items-center nav-fix-match-action';
+            card.setAttribute('tabindex', '0');
+
+            const imgUrl = item.posterPath || 'img/poster-placeholder.png';
+            const yearStr = item.releaseYear ? `(${item.releaseYear})` : '';
+
+            card.innerHTML = `
+                <img src="${imgUrl}" alt="poster" class="rounded" style="width: 50px; height: 75px; object-fit: cover;">
+                <div class="flex-grow-1 min-width-0">
+                    <h4 class="fs-6 text-white fw-bold mb-1 text-truncate">${item.title} <span class="text-secondary font-monospace fs-7 fw-normal">${yearStr}</span></h4>
+                    <p class="text-secondary fs-8 mb-0 text-truncate-2">${item.overview || 'No overview available.'}</p>
+                </div>
+                <button class="btn btn-sm btn-primary px-3 btn-select-match nav-fix-match-action-btn" data-external-id="${item.id}" tabindex="0">
+                    Match
+                </button>
+            `;
+
+            // Click on the card or on the Match button matches the item
+            const handleMatch = async (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                const externalId = item.id;
+                await applyMetadataMatch(externalId);
+            };
+
+            card.addEventListener('click', handleMatch);
+            const matchBtn = card.querySelector('.btn-select-match');
+            if (matchBtn) {
+                matchBtn.addEventListener('click', handleMatch);
+            }
+
+            fixMatchResults.appendChild(card);
+        });
+
+        // Trigger remote navigation refresh so it picks up the newly rendered result cards
+        if (window.remoteNavigation && window.remoteNavigation.enterFixMatchMode) {
+            window.remoteNavigation.enterFixMatchMode();
+        }
+    }
+
+    async function applyMetadataMatch(externalId) {
+        if (!activeMatchId || !activeMatchType || !externalId) return;
+
+        showToast("🦈 Syncing metadata under the surface...");
+        closeFixMatch();
+
+        try {
+            const response = await fetch('/api/metadata/match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mediaId: activeMatchId,
+                    type: activeMatchType,
+                    externalId: externalId
+                })
+            });
+
+            if (!response.ok) throw new Error('Match sync failed');
+
+            showToast("✅ Metadata successfully updated!");
+            
+            // Refresh details page
+            if (activeMatchType === 'movie') {
+                const getMovieRes = await fetch(`/api/media/${activeMatchId}`);
+                if (getMovieRes.ok) {
+                    const updatedMovie = await getMovieRes.json();
+                    closeDetails();
+                    openMovieDetails(updatedMovie);
+                }
+            } else if (activeMatchType === 'tv') {
+                const getTvRes = await fetch(`/api/tvshows/${activeMatchId}`);
+                if (getTvRes.ok) {
+                    const updatedTv = await getTvRes.json();
+                    closeDetails();
+                    openTvShowDetails(updatedTv);
+                }
+            }
+
+            loadMediaLibrary();
+
+        } catch (err) {
+            console.error('Error applying metadata match:', err);
+            showToast(`❌ Error: ${err.message}`);
+        }
+    }
+
     function formatDurationLabel(totalSeconds) {
         if (!totalSeconds || totalSeconds <= 0) return '';
         const hrs = Math.floor(totalSeconds / 3600);
@@ -1633,6 +1804,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCloseAboutX) btnCloseAboutX.addEventListener('click', closeAbout);
     if (btnCloseAboutOk) btnCloseAboutOk.addEventListener('click', closeAbout);
     window.closeAbout = closeAbout;
+
+    if (btnFixMatch) btnFixMatch.addEventListener('click', openFixMatch);
+    if (btnCloseFixMatchX) btnCloseFixMatchX.addEventListener('click', closeFixMatch);
+    if (btnCloseFixMatch) btnCloseFixMatch.addEventListener('click', closeFixMatch);
+    if (btnFixMatchSearch) btnFixMatchSearch.addEventListener('click', searchMatchMetadata);
+    if (inputFixMatchQuery) {
+        inputFixMatchQuery.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchMatchMetadata();
+            }
+        });
+    }
 
     btnSettings.addEventListener('click', openSettings);
     btnGoSettings.addEventListener('click', openSettings);

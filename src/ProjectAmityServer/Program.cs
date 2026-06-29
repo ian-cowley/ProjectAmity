@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -249,6 +250,135 @@ namespace ProjectAmityServer
                 {
                     app.Logger.LogError(ex, $"Error getting media item {id}");
                     return Results.Problem("Database query failed.");
+                }
+            });
+
+            // 2a-2. GET /api/metadata/search - Search TMDb or TVmaze for matches
+            app.MapGet("/api/metadata/search", async (string query, string mediaType, MetadataScraperService scraper) =>
+            {
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    return Results.BadRequest("Query parameter is required.");
+                }
+
+                if (mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase))
+                {
+                    var results = await scraper.SearchMoviesAsync(query);
+                    var list = results.Select(r => new {
+                        Id = r.TmdbId,
+                        Title = r.Title,
+                        ReleaseYear = r.ReleaseYear,
+                        PosterPath = r.PosterPath,
+                        Overview = r.Overview
+                    });
+                    return Results.Ok(list);
+                }
+                else if (mediaType.Equals("tv", StringComparison.OrdinalIgnoreCase))
+                {
+                    var results = await scraper.SearchTvShowsAsync(query);
+                    var list = results.Select(r => new {
+                        Id = r.TvmazeId,
+                        Title = r.Title,
+                        ReleaseYear = r.ReleaseYear,
+                        PosterPath = r.PosterPath,
+                        Overview = r.Overview
+                    });
+                    return Results.Ok(list);
+                }
+                else
+                {
+                    return Results.BadRequest("Invalid mediaType. Must be 'movie' or 'tv'.");
+                }
+            });
+
+            // 2a-3. POST /api/metadata/match - Manually link an item to an external ID
+            app.MapPost("/api/metadata/match", async (MatchRequest req, GlacierDbService db, MetadataScraperService scraper, ILogger<Program> logger) =>
+            {
+                try
+                {
+                    if (req.Type.Equals("movie", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var meta = await scraper.FetchMovieMetadataByIdAsync(req.ExternalId);
+                        if (meta == null) return Results.NotFound("TMDb metadata not found for the specified ID.");
+
+                        string castJson = JsonSerializer.Serialize(meta.Cast, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                        await db.UpdateRowAsync("MediaItems", req.MediaId, new Dictionary<string, object?>
+                        {
+                            { "Title", meta.Title },
+                            { "ReleaseYear", meta.ReleaseYear ?? (object)DBNull.Value },
+                            { "PosterPath", string.IsNullOrWhiteSpace(meta.PosterPath) ? DBNull.Value : meta.PosterPath },
+                            { "Overview", string.IsNullOrWhiteSpace(meta.Overview) ? DBNull.Value : meta.Overview },
+                            { "Genres", string.IsNullOrWhiteSpace(meta.Genres) ? DBNull.Value : meta.Genres },
+                            { "Director", string.IsNullOrWhiteSpace(meta.Director) ? DBNull.Value : meta.Director },
+                            { "CastJson", castJson }
+                        });
+
+                        logger.LogInformation($"Manually matched Movie ID {req.MediaId} with TMDb ID {req.ExternalId}");
+                        return Results.Ok(new { Success = true });
+                    }
+                    else if (req.Type.Equals("tv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var meta = await scraper.FetchTvShowMetadataByIdAsync(req.ExternalId);
+                        if (meta == null) return Results.NotFound("TVmaze metadata not found for the specified ID.");
+
+                        string castJson = JsonSerializer.Serialize(meta.Cast, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                        await db.UpdateRowAsync("TvShows", req.MediaId, new Dictionary<string, object?>
+                        {
+                            { "Title", meta.Title },
+                            { "Overview", string.IsNullOrWhiteSpace(meta.Overview) ? DBNull.Value : meta.Overview },
+                            { "PosterPath", string.IsNullOrWhiteSpace(meta.PosterPath) ? DBNull.Value : meta.PosterPath },
+                            { "Genres", string.IsNullOrWhiteSpace(meta.Genres) ? DBNull.Value : meta.Genres },
+                            { "ReleaseYear", meta.ReleaseYear ?? (object)DBNull.Value },
+                            { "CastJson", castJson },
+                            { "TvmazeId", req.ExternalId }
+                        });
+
+                        // Sync episodes for the newly matched TV show
+                        var eps = await scraper.FetchEpisodesListAsync(req.ExternalId);
+                        if (eps != null)
+                        {
+                            // Fetch all episodes belonging to this TV show in MediaItems
+                            string getEpsQuery = "SELECT Id, SeasonNumber, EpisodeNumber, Title FROM MediaItems WHERE TvShowId = @ShowId";
+                            var mediaEps = await db.ExecuteQueryAsync(getEpsQuery, new Dictionary<string, object?> { { "@ShowId", req.MediaId } });
+
+                            foreach (var row in mediaEps)
+                            {
+                                int epId = Convert.ToInt32(row["Id"]);
+                                int? sNum = row["SeasonNumber"] == null || row["SeasonNumber"] is DBNull ? null : Convert.ToInt32(row["SeasonNumber"]);
+                                int? eNum = row["EpisodeNumber"] == null || row["EpisodeNumber"] is DBNull ? null : Convert.ToInt32(row["EpisodeNumber"]);
+
+                                if (sNum.HasValue && eNum.HasValue)
+                                {
+                                    var tvmazeEp = eps.Find(e => e.Season == sNum.Value && e.Number == eNum.Value);
+                                    if (tvmazeEp != null)
+                                    {
+                                        string epTitle = $"{meta.Title} - S{sNum.Value:D2}E{eNum.Value:D2} - {tvmazeEp.Name}";
+                                        string epOverview = tvmazeEp.Summary ?? "";
+                                        string epImage = tvmazeEp.Image?.Original ?? tvmazeEp.Image?.Medium ?? "";
+
+                                        await db.UpdateRowAsync("MediaItems", epId, new Dictionary<string, object?>
+                                        {
+                                            { "Title", epTitle },
+                                            { "Overview", string.IsNullOrWhiteSpace(epOverview) ? DBNull.Value : epOverview },
+                                            { "PosterPath", string.IsNullOrWhiteSpace(epImage) ? DBNull.Value : epImage }
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        logger.LogInformation($"Manually matched TV Show ID {req.MediaId} with TVmaze ID {req.ExternalId} and synced episodes");
+                        return Results.Ok(new { Success = true });
+                    }
+                    else
+                    {
+                        return Results.BadRequest("Invalid type. Must be 'movie' or 'tv'.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, $"Error matching media item {req.MediaId} of type {req.Type} to external ID {req.ExternalId}");
+                    return Results.Problem("Failed to match metadata.");
                 }
             });
 
@@ -1729,4 +1859,5 @@ namespace ProjectAmityServer
     public record ReorderPlaylistRequest(List<int> ItemIds);
     public record MediaSubtitleDto(int Id, int MediaItemId, string SubtitleType, string Language, string Title, string Format, int? StreamIndex);
     public record MediaSpecsDto(int MediaItemId, string? Container, string? VideoCodec, string? VideoResolution, int VideoBitrate, string? VideoFrameRate, string? AudioCodec, int AudioChannels, long FileSize);
+    public record MatchRequest(int MediaId, string Type, int ExternalId);
 }

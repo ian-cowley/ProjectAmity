@@ -403,6 +403,9 @@
                                     <button id="btn-edit-metadata" class="btn-details-secondary btn-details-icon nav-details-action" title="Edit Details" tabindex="0">
                                         ✏️
                                     </button>
+                                    <button id="btn-fix-match" class="btn-details-secondary btn-details-icon nav-details-action" title="Fix Match" tabindex="0">
+                                        🔍
+                                    </button>
                                     
                                     <!-- Add to Collection Dropdown -->
                                     <div class="dropdown" id="dropdown-add-collection-container">
@@ -599,6 +602,39 @@
         </div>
     </div>
 
+    <!-- Fullscreen Fix Match Overlay -->
+    <div id="fix-match-overlay" class="settings-overlay d-none">
+        <div class="settings-container" style="max-width: 650px; background: linear-gradient(135deg, rgba(20, 21, 28, 0.98) 0%, rgba(10, 11, 15, 0.98) 100%);">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                <h2 class="fs-4 fw-bold mb-0 text-white">🔍 Fix Match / Identify</h2>
+                <button id="btn-close-fix-match-x" class="btn btn-link text-white text-decoration-none fs-4 p-0 line-height-1" aria-label="Close Fix Match">✕</button>
+            </div>
+            
+            <div class="mb-4">
+                <div class="input-group">
+                    <input type="text" id="input-fix-match-query" class="form-control bg-dark border-secondary text-white nav-fix-match-action" placeholder="Search title..." tabindex="0">
+                    <button id="btn-fix-match-search" class="btn btn-primary nav-fix-match-action" type="button" tabindex="0">Search</button>
+                </div>
+            </div>
+
+            <!-- Loader spinner -->
+            <div id="fix-match-loader" class="text-center py-4 d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Scrollable Search Results List -->
+            <div id="fix-match-results" class="max-height-350 overflow-y-auto px-1 d-flex flex-column gap-3">
+                <p class="text-secondary text-center my-4">Search TMDb / TVmaze to find correct metadata match.</p>
+            </div>
+
+            <div class="d-flex gap-2 border-top border-secondary pt-3 mt-4">
+                <button id="btn-close-fix-match" class="btn btn-outline-secondary btn-sm flex-grow-1 nav-fix-match-action" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- General UI Toast Notification -->
     <div id="general-toast" class="general-toast d-none">
         <span id="general-toast-message">Toast Message</span>
@@ -607,8 +643,8 @@
     <!-- Local Bootstrap 5 Bundle JS -->
     <script src="lib/bootstrap/js/bootstrap.bundle.min.js"></script>
     <!-- Application Logic -->
-    <script src="js/app.js?v=2076"></script>
+    <script src="js/app.js?v=2080"></script>
     <!-- Keyboard/Remote Navigation Loop -->
-    <script src="js/remote-navigation.js?v=2076"></script>
+    <script src="js/remote-navigation.js?v=2080"></script>
 </body>
 </html>

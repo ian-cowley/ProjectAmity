@@ -9,6 +9,7 @@
     let isDetailsMode = false;
     let isMetadataEditorMode = false;
     let isAboutMode = false;
+    let isFixMatchMode = false;
 
     // Refresh the list of navigatable elements based on the current context
     function refreshFocusableElements() {
@@ -18,6 +19,9 @@
         if (isMetadataEditorMode) {
             // Isolate focus to metadata editor controls
             query = '#metadata-editor-overlay input, #metadata-editor-overlay textarea, #metadata-editor-overlay button';
+        } else if (isFixMatchMode) {
+            // Isolate focus to Fix Match overlay controls
+            query = '#fix-match-overlay input, #fix-match-overlay button, #fix-match-overlay .nav-fix-match-action';
         } else if (isAboutMode) {
             // Isolate focus to about overlay controls
             query = '#about-overlay button';
@@ -181,7 +185,21 @@
             }
         }
 
-        // 2b. If in about mode, Escape or Backspace closes about overlay
+        // 2b. If in Fix Match mode, Escape or Backspace (when not typing in search box) closes Fix Match overlay
+        if (isFixMatchMode) {
+            const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            const isTyping = activeTag === 'input' && e.key !== 'Escape' && e.key !== 'Enter' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown';
+
+            if ((e.key === 'Escape' || e.key === 'Backspace') && !isTyping) {
+                e.preventDefault();
+                if (window.closeFixMatch) {
+                    window.closeFixMatch();
+                }
+                return;
+            }
+        }
+
+        // 2c. If in about mode, Escape or Backspace closes about overlay
         if (isAboutMode) {
             if (e.key === 'Escape' || e.key === 'Backspace') {
                 e.preventDefault();
@@ -346,6 +364,23 @@
             isAboutMode = false;
             currentFocusedIndex = 0;
             refreshFocusableElements();
+        },
+        enterFixMatchMode: () => {
+            isFixMatchMode = true;
+            isDetailsMode = false;
+            isMetadataEditorMode = false;
+            isSettingsMode = false;
+            isFolderPickerMode = false;
+            isAboutMode = false;
+            currentFocusedIndex = 0;
+            setTimeout(refreshFocusableElements, 50);
+        },
+        exitFixMatchMode: () => {
+            isFixMatchMode = false;
+            // Return focus to details overlay
+            isDetailsMode = true;
+            currentFocusedIndex = 0;
+            setTimeout(refreshFocusableElements, 50);
         }
     };
 })();

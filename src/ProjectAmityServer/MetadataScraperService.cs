@@ -34,7 +34,93 @@ namespace ProjectAmityServer
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        // ==================== MOVIES (TMDB HTML SCRAPER) ====================
+        public async Task<List<MovieMetadata>> SearchMoviesAsync(string query)
+        {
+            _logger.LogInformation($"Searching TMDb for movies matching: '{query}'");
+            var results = new List<MovieMetadata>();
+            try
+            {
+                string lang = await GetMetadataLanguageAsync();
+                string url = $"https://www.themoviedb.org/search/movie?query={Uri.EscapeDataString(query)}&language={lang}";
+                
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return results;
+
+                string searchHtml = await response.Content.ReadAsStringAsync();
+                string finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? url;
+
+                var directMovieMatch = Regex.Match(finalUrl, @"/movie/(?<id>\d+)", RegexOptions.IgnoreCase);
+                if (directMovieMatch.Success)
+                {
+                    string id = directMovieMatch.Groups["id"].Value;
+                    var meta = ParseMoviePage(searchHtml, finalUrl);
+                    if (meta != null)
+                    {
+                        meta.TmdbId = int.Parse(id);
+                        results.Add(meta);
+                    }
+                    return results;
+                }
+
+                // Find all movie links (/movie/(\d+)-slug)
+                var matches = Regex.Matches(searchHtml, @"href=""/movie/(?<id>\d+)[^""]*""");
+                var ids = matches.Cast<Match>()
+                                 .Select(m => m.Groups["id"].Value)
+                                 .Distinct()
+                                 .Take(5) // Limit to top 5 candidates
+                                 .ToList();
+
+                var tasks = ids.Select(async id => {
+                    try
+                    {
+                        string movieUrl = $"https://www.themoviedb.org/movie/{id}?language={lang}";
+                        string detailsHtml = await _httpClient.GetStringAsync(movieUrl);
+                        var meta = ParseMoviePage(detailsHtml, movieUrl);
+                        if (meta != null)
+                        {
+                            meta.TmdbId = int.Parse(id);
+                        }
+                        return meta;
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                });
+
+                var fetched = await Task.WhenAll(tasks);
+                foreach (var item in fetched)
+                {
+                    if (item != null) results.Add(item);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error searching TMDb for movies: {query}");
+            }
+            return results;
+        }
+
+        public async Task<MovieMetadata?> FetchMovieMetadataByIdAsync(int tmdbId)
+        {
+            try
+            {
+                string lang = await GetMetadataLanguageAsync();
+                string url = $"https://www.themoviedb.org/movie/{tmdbId}?language={lang}";
+                string detailsHtml = await _httpClient.GetStringAsync(url);
+                var meta = ParseMoviePage(detailsHtml, url);
+                if (meta != null)
+                {
+                    meta.TmdbId = tmdbId;
+                }
+                return meta;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching TMDb movie metadata by ID: {tmdbId}");
+                return null;
+            }
+        }
 
         public async Task<MovieMetadata?> ScrapeMovieMetadataAsync(string title, int? year)
         {
@@ -279,6 +365,109 @@ namespace ProjectAmityServer
 
         // ==================== TV SHOWS (TVMAZE JSON API) ====================
 
+        private TvShowMetadata ParseTvShowMetadata(JsonElement root)
+        {
+            int tvmazeId = root.GetProperty("id").GetInt32();
+            string title = "";
+            if (root.TryGetProperty("name", out var nameProp))
+            {
+                title = nameProp.GetString() ?? "";
+            }
+
+            var meta = new TvShowMetadata
+            {
+                TvmazeId = tvmazeId,
+                Title = title
+            };
+
+            // Summary
+            if (root.TryGetProperty("summary", out var summaryProp))
+            {
+                meta.Overview = summaryProp.GetString() ?? "";
+            }
+
+            // Release Year
+            if (root.TryGetProperty("premiered", out var premProp) && premProp.ValueKind == JsonValueKind.String)
+            {
+                string premDate = premProp.GetString() ?? "";
+                if (premDate.Length >= 4 && int.TryParse(premDate.Substring(0, 4), out int year))
+                {
+                    meta.ReleaseYear = year;
+                }
+            }
+
+            // Poster
+            if (root.TryGetProperty("image", out var imgProp) && imgProp.ValueKind == JsonValueKind.Object)
+            {
+                if (imgProp.TryGetProperty("original", out var origProp))
+                {
+                    meta.PosterPath = origProp.GetString() ?? "";
+                }
+                else if (imgProp.TryGetProperty("medium", out var medProp))
+                {
+                    meta.PosterPath = medProp.GetString() ?? "";
+                }
+            }
+
+            // Genres
+            if (root.TryGetProperty("genres", out var genresProp) && genresProp.ValueKind == JsonValueKind.Array)
+            {
+                var genresList = new List<string>();
+                foreach (var g in genresProp.EnumerateArray())
+                {
+                    genresList.Add(g.GetString() ?? "");
+                }
+                meta.Genres = string.Join(", ", genresList);
+            }
+
+            // Cast List
+            var castList = new List<CastMember>();
+            if (root.TryGetProperty("_embedded", out var embedProp) && 
+                embedProp.TryGetProperty("cast", out var castProp) && 
+                castProp.ValueKind == JsonValueKind.Array)
+            {
+                int count = 0;
+                foreach (var member in castProp.EnumerateArray())
+                {
+                    if (count >= 10) break;
+
+                    string actorName = "";
+                    string roleName = "";
+                    string actorImg = "";
+
+                    if (member.TryGetProperty("person", out var person) && person.TryGetProperty("name", out var pName))
+                    {
+                        actorName = pName.GetString() ?? "";
+                    }
+                    if (member.TryGetProperty("character", out var character) && character.TryGetProperty("name", out var cName))
+                    {
+                        roleName = cName.GetString() ?? "";
+                    }
+                    if (member.TryGetProperty("person", out var p) && p.TryGetProperty("image", out var pImg) && pImg.ValueKind == JsonValueKind.Object)
+                    {
+                        if (pImg.TryGetProperty("medium", out var medImg))
+                        {
+                            actorImg = medImg.GetString() ?? "";
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(actorName))
+                    {
+                        castList.Add(new CastMember
+                        {
+                            Name = actorName,
+                            Character = roleName,
+                            ImageUrl = actorImg
+                        });
+                        count++;
+                    }
+                }
+            }
+            meta.Cast = castList;
+
+            return meta;
+        }
+
         public async Task<TvShowMetadata?> FetchTvShowMetadataAsync(string showName)
         {
             _logger.LogInformation($"Querying TVmaze API for show: '{showName}'");
@@ -295,100 +484,7 @@ namespace ProjectAmityServer
                 string jsonString = await response.Content.ReadAsStringAsync();
                 using (var doc = JsonDocument.Parse(jsonString))
                 {
-                    var root = doc.RootElement;
-                    var meta = new TvShowMetadata
-                    {
-                        TvmazeId = root.GetProperty("id").GetInt32(),
-                        Title = root.GetProperty("name").GetString() ?? showName
-                    };
-
-                    // Summary
-                    if (root.TryGetProperty("summary", out var summaryProp))
-                    {
-                        // Clean <p> and HTML tags if desired, but retaining tags is fine for HTML display
-                        meta.Overview = summaryProp.GetString();
-                    }
-
-                    // Release Year
-                    if (root.TryGetProperty("premiered", out var premProp) && premProp.ValueKind == JsonValueKind.String)
-                    {
-                        string premDate = premProp.GetString() ?? "";
-                        if (premDate.Length >= 4 && int.TryParse(premDate.Substring(0, 4), out int year))
-                        {
-                            meta.ReleaseYear = year;
-                        }
-                    }
-
-                    // Poster
-                    if (root.TryGetProperty("image", out var imgProp) && imgProp.ValueKind == JsonValueKind.Object)
-                    {
-                        if (imgProp.TryGetProperty("original", out var origProp))
-                        {
-                            meta.PosterPath = origProp.GetString() ?? "";
-                        }
-                        else if (imgProp.TryGetProperty("medium", out var medProp))
-                        {
-                            meta.PosterPath = medProp.GetString() ?? "";
-                        }
-                    }
-
-                    // Genres
-                    if (root.TryGetProperty("genres", out var genresProp) && genresProp.ValueKind == JsonValueKind.Array)
-                    {
-                        var genresList = new List<string>();
-                        foreach (var g in genresProp.EnumerateArray())
-                        {
-                            genresList.Add(g.GetString() ?? "");
-                        }
-                        meta.Genres = string.Join(", ", genresList);
-                    }
-
-                    // Cast List
-                    var castList = new List<CastMember>();
-                    if (root.TryGetProperty("_embedded", out var embedProp) && 
-                        embedProp.TryGetProperty("cast", out var castProp) && 
-                        castProp.ValueKind == JsonValueKind.Array)
-                    {
-                        int count = 0;
-                        foreach (var member in castProp.EnumerateArray())
-                        {
-                            if (count >= 10) break;
-
-                            string actorName = "";
-                            string roleName = "";
-                            string actorImg = "";
-
-                            if (member.TryGetProperty("person", out var person) && person.TryGetProperty("name", out var pName))
-                            {
-                                actorName = pName.GetString() ?? "";
-                            }
-                            if (member.TryGetProperty("character", out var character) && character.TryGetProperty("name", out var cName))
-                            {
-                                roleName = cName.GetString() ?? "";
-                            }
-                            if (member.TryGetProperty("person", out var p) && p.TryGetProperty("image", out var pImg) && pImg.ValueKind == JsonValueKind.Object)
-                            {
-                                if (pImg.TryGetProperty("medium", out var medImg))
-                                {
-                                    actorImg = medImg.GetString() ?? "";
-                                }
-                            }
-
-                            if (!string.IsNullOrEmpty(actorName))
-                            {
-                                castList.Add(new CastMember
-                                {
-                                    Name = actorName,
-                                    Character = roleName,
-                                    ImageUrl = actorImg
-                                });
-                                count++;
-                            }
-                        }
-                    }
-                    meta.Cast = castList;
-
-                    return meta;
+                    return ParseTvShowMetadata(doc.RootElement);
                 }
             }
             catch (Exception ex)
@@ -396,6 +492,58 @@ namespace ProjectAmityServer
                 _logger.LogError(ex, $"Error fetching TVmaze show metadata for {showName}");
                 return null;
             }
+        }
+
+        public async Task<TvShowMetadata?> FetchTvShowMetadataByIdAsync(int tvmazeId)
+        {
+            _logger.LogInformation($"Querying TVmaze API for show by ID: {tvmazeId}");
+            try
+            {
+                string url = $"https://api.tvmaze.com/shows/{tvmazeId}?embed=cast";
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return null;
+
+                string jsonString = await response.Content.ReadAsStringAsync();
+                using (var doc = JsonDocument.Parse(jsonString))
+                {
+                    return ParseTvShowMetadata(doc.RootElement);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error fetching TVmaze show metadata by ID: {tvmazeId}");
+                return null;
+            }
+        }
+
+        public async Task<List<TvShowMetadata>> SearchTvShowsAsync(string query)
+        {
+            _logger.LogInformation($"Searching TVmaze for shows matching: '{query}'");
+            var results = new List<TvShowMetadata>();
+            try
+            {
+                string url = $"https://api.tvmaze.com/search/shows?q={Uri.EscapeDataString(query)}";
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return results;
+
+                string jsonString = await response.Content.ReadAsStringAsync();
+                using (var doc = JsonDocument.Parse(jsonString))
+                {
+                    foreach (var item in doc.RootElement.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("show", out var show))
+                        {
+                            var meta = ParseTvShowMetadata(show);
+                            if (meta != null) results.Add(meta);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error searching TVmaze for shows: {query}");
+            }
+            return results;
         }
 
         public async Task<List<TvmazeEpisode>?> FetchEpisodesListAsync(int showId)
@@ -443,6 +591,7 @@ namespace ProjectAmityServer
 
     public class MovieMetadata
     {
+        public int TmdbId { get; set; }
         public string Title { get; set; } = "";
         public string Overview { get; set; } = "";
         public string PosterPath { get; set; } = "";
